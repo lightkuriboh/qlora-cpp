@@ -18,20 +18,22 @@ namespace qlora::data_structure
     template <typename T>
     class QuantizedData {
       public:
-        QuantizedData(): block_size_(0), original_data_size_(0), num_blocks_(0) {};
+        QuantizedData(): original_data_size_(0), block_size_(0), num_blocks_(0) {};
 
-        QuantizedData(std::size_t block_size,
-                      std::size_t original_data_size,
+        QuantizedData(std::size_t original_data_size,
+                      std::size_t block_size,
                       std::size_t num_blocks)
-            : block_size_(block_size),
-              original_data_size_(original_data_size),
+            : original_data_size_(original_data_size),
+              block_size_(block_size),
               num_blocks_(num_blocks),
               weight_nf4_centroid_indices_((original_data_size + 1) / 2),
               quantize_constants_(num_blocks) {}
 
-        std::size_t block_size() const { return block_size_; }
+
         std::size_t original_data_size() const { return original_data_size_; }
+        std::size_t block_size() const { return block_size_; }
         std::size_t num_blocks() const { return num_blocks_; }
+
 
         // Assign 4-bit quantized_value to a specific [target_index].
         void AssignQuantizedValue(size_t target_index, std::uint8_t value) {
@@ -79,8 +81,8 @@ namespace qlora::data_structure
         }
 
       private:
-        std::size_t block_size_;
         std::size_t original_data_size_;
+        std::size_t block_size_;
         std::size_t num_blocks_;
 
         std::vector<std::uint8_t> weight_nf4_centroid_indices_;

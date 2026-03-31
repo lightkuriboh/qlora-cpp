@@ -25,7 +25,7 @@ namespace qlora::core {
         if (input.empty()) return {};
 
         auto num_blocks = (input.size() + block_size - 1) / block_size;
-        ::qlora::data_structure::QuantizedData<T> quantized_data(block_size, input.size(), num_blocks);
+        ::qlora::data_structure::QuantizedData<T> quantized_data(input.size(), block_size, num_blocks);
 
         for (size_t block = 0; block < num_blocks; ++block) {
             const size_t block_start = block * block_size;
