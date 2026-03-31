@@ -37,23 +37,9 @@ namespace qlora::core {
 
             for (size_t i = block_start; i < block_end; ++i) {
                 const auto normalized_scalar = input[i] / abs_max;
-                const auto& centroids = ::qlora::nf4_constants::kNf4Centroids;
-                size_t closest_centroid_index = 0;
-
-                const auto it = std::lower_bound(centroids.begin(), centroids.end(), normalized_scalar);
-                if (it == centroids.end()) {
-                    closest_centroid_index = centroids.size() - 1;
-                } else if (it == centroids.begin()) {
-                    closest_centroid_index = 0;
-                } else {
-                    const auto prev_centroid_iterator = std::prev(it);
-                    closest_centroid_index =
-                        std::abs(*it - normalized_scalar) < std::abs(*prev_centroid_iterator - normalized_scalar)
-                            ? static_cast<size_t>(std::distance(centroids.begin(), it))
-                            : static_cast<size_t>(std::distance(centroids.begin(), prev_centroid_iterator));
-                }
-                
-                quantized_data.AssignQuantizedValue(i, static_cast<std::uint8_t>(closest_centroid_index));
+                quantized_data.AssignQuantizedValue(
+                    i,
+                    static_cast<std::uint8_t>(::qlora::nf4_constants::GetClosestCentroidIndex(normalized_scalar)));
             }
 
         }
