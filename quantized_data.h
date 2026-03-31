@@ -28,7 +28,7 @@ namespace qlora::data_structure
         std::size_t original_data_size() const { return original_data_size_; }
         std::size_t num_blocks() const { return num_blocks_; }
 
-        /** Assign 4-bit quantized_value to a specific [target_index]. */
+        // Assign 4-bit quantized_value to a specific [target_index].
         void AssignQuantizedValue(size_t target_index, std::uint8_t value) {
             if (target_index >= original_data_size_) {
                 throw std::out_of_range("Index out of range for quantized values.");
@@ -43,7 +43,7 @@ namespace qlora::data_structure
             }
         }
 
-        /** Get the quantized value at a specific [target_index]. */
+        // Get the quantized value at a specific [target_index].
         std::uint8_t GetQuantizedValue(size_t target_index) const {
             if (target_index >= quantized_values_.size() * 2) {
                 throw std::out_of_range("Index out of range for quantized values.");
@@ -56,7 +56,18 @@ namespace qlora::data_structure
             }
         }
 
-        /** Set the quantize constant at a specific [target_index]. */
+        // Get both high and low nibbles as a pair for a specific [target_index].
+        std::pair<std::uint8_t, std::uint8_t> GetQuantizedValuesPair(size_t target_index) const {
+            if (target_index >= quantized_values_.size() * 2) {
+                throw std::out_of_range("Index out of range for quantized values.");
+            }
+            size_t actual_index = target_index / 2;
+            std::uint8_t high_nibble = (quantized_values_[actual_index] >> 4) & 0x0F;
+            std::uint8_t low_nibble = quantized_values_[actual_index] & 0x0F;
+            return {high_nibble, low_nibble};
+        }
+
+        // Set the quantize constant at a specific [target_index].
         void SetQuantizeConstant(size_t target_index, T value) {
             if (target_index >= quantize_constants_.size()) {
                 throw std::out_of_range("Index out of range for quantize constants.");
@@ -64,7 +75,7 @@ namespace qlora::data_structure
             quantize_constants_[target_index] = value;
         }
 
-        /** Get the quantize constant at a specific [target_index]. */
+        // Get the quantize constant at a specific [target_index].
         T GetQuantizeConstant(size_t target_index) const {
             if (target_index >= quantize_constants_.size()) {
                 throw std::out_of_range("Index out of range for quantize constants.");

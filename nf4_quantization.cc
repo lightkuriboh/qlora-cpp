@@ -95,12 +95,18 @@ namespace qlora::core {
     template<typename T>
     std::vector<T> Dequantize(const data_structure::QuantizedData<T>& quantized_data) {
         std::vector<T> dequantized_values(quantized_data.original_data_size());
-        for (size_t i = 0; i < quantized_data.original_data_size(); i += 1) {
-            const std::uint8_t quantized_index = quantized_data.GetQuantizedValue(i);
-            const float centroid_value = ::qlora::nf4_constants::kNf4Centroids[quantized_index];
-            const T quantize_constant = quantized_data.GetQuantizeConstant(i / quantized_data.block_size());
+        for (size_t i = 0; i < quantized_data.original_data_size(); i += 2) {
+            const auto [high_nibble, low_nibble] = quantized_data.GetQuantizedValuesPair(i);
 
-            dequantized_values[i] = static_cast<T>(quantize_constant * centroid_value);
+            const float high_nibble_centroid_value = ::qlora::nf4_constants::kNf4Centroids[high_nibble];
+            const T quantize_constant_i = quantized_data.GetQuantizeConstant(i / quantized_data.block_size());
+            dequantized_values[i] = static_cast<T>(quantize_constant_i * high_nibble_centroid_value);
+            
+            const float low_nibble_centroid_value = ::qlora::nf4_constants::kNf4Centroids[low_nibble];            
+            if (i + 1 < quantized_data.original_data_size()) {
+                const T quantize_constant_i_plus_1 = quantized_data.GetQuantizeConstant(i / quantized_data.block_size());
+                dequantized_values[i + 1] = static_cast<T>(quantize_constant_i_plus_1 * low_nibble_centroid_value);
+            }
         }
         return dequantized_values;
     }
