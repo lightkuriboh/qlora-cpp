@@ -96,7 +96,7 @@ namespace qlora::core {
     std::vector<T> Dequantize(const data_structure::QuantizedData<T>& quantized_data) {
         std::vector<T> dequantized_values(quantized_data.original_data_size());
         for (size_t i = 0; i < quantized_data.original_data_size(); i += 2) {
-            const auto [high_nibble, low_nibble] = quantized_data.GetQuantizedValuesPair(i);
+            const auto [high_nibble, low_nibble] = quantized_data.GetNf4CentroidIndicesPair(i);
 
             const float high_nibble_centroid_value = ::qlora::nf4_constants::kNf4Centroids[high_nibble];
             const T quantize_constant_i = quantized_data.GetQuantizeConstant(i / quantized_data.block_size());
@@ -116,7 +116,7 @@ namespace qlora::core {
 int main() {
 
     size_t block_size = 64;
-    size_t vector_size = 1024;
+    size_t vector_size = 1 << 16;
     bool is_verbose = false;
 
     if (is_verbose) {

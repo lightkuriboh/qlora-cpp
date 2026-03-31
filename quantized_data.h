@@ -21,7 +21,7 @@ namespace qlora::data_structure
             : block_size_(block_size),
               original_data_size_(quantized_data_size),
               num_blocks_(quantize_constant_size),
-              quantized_values_((quantized_data_size + 1) / 2),
+              weight_nf4_centroid_indices_((quantized_data_size + 1) / 2),
               quantize_constants_(quantize_constant_size) {}
 
         std::size_t block_size() const { return block_size_; }
@@ -37,33 +37,33 @@ namespace qlora::data_structure
             const std::uint8_t nibble = value & 0x0F;
 
             if (target_index % 2 == 0) {
-                quantized_values_[actual_index] = (quantized_values_[actual_index] & 0x0F) | (nibble << 4);
+                weight_nf4_centroid_indices_[actual_index] = (weight_nf4_centroid_indices_[actual_index] & 0x0F) | (nibble << 4);
             } else {
-                quantized_values_[actual_index] = (quantized_values_[actual_index] & 0xF0) | nibble;
+                weight_nf4_centroid_indices_[actual_index] = (weight_nf4_centroid_indices_[actual_index] & 0xF0) | nibble;
             }
         }
 
         // Get the quantized value at a specific [target_index].
-        std::uint8_t GetQuantizedValue(size_t target_index) const {
-            if (target_index >= quantized_values_.size() * 2) {
+        std::uint8_t GetNf4CentroidIndex(size_t target_index) const {
+            if (target_index >= weight_nf4_centroid_indices_.size() * 2) {
                 throw std::out_of_range("Index out of range for quantized values.");
             }
             size_t actual_index = target_index / 2;
             if (target_index % 2 == 0) {
-                return (quantized_values_[actual_index] >> 4) & 0x0F;
+                return (weight_nf4_centroid_indices_[actual_index] >> 4) & 0x0F;
             } else {
-                return quantized_values_[actual_index] & 0x0F;
+                return weight_nf4_centroid_indices_[actual_index] & 0x0F;
             }
         }
 
         // Get both high and low nibbles as a pair for a specific [target_index].
-        std::pair<std::uint8_t, std::uint8_t> GetQuantizedValuesPair(size_t target_index) const {
-            if (target_index >= quantized_values_.size() * 2) {
+        std::pair<std::uint8_t, std::uint8_t> GetNf4CentroidIndicesPair(size_t target_index) const {
+            if (target_index >= weight_nf4_centroid_indices_.size() * 2) {
                 throw std::out_of_range("Index out of range for quantized values.");
             }
             size_t actual_index = target_index / 2;
-            std::uint8_t high_nibble = (quantized_values_[actual_index] >> 4) & 0x0F;
-            std::uint8_t low_nibble = quantized_values_[actual_index] & 0x0F;
+            std::uint8_t high_nibble = (weight_nf4_centroid_indices_[actual_index] >> 4) & 0x0F;
+            std::uint8_t low_nibble = weight_nf4_centroid_indices_[actual_index] & 0x0F;
             return {high_nibble, low_nibble};
         }
 
@@ -88,7 +88,7 @@ namespace qlora::data_structure
         std::size_t original_data_size_;
         std::size_t num_blocks_;
 
-        std::vector<std::uint8_t> quantized_values_;
+        std::vector<std::uint8_t> weight_nf4_centroid_indices_;
         std::vector<T> quantize_constants_;
     };
 }  // namespace qlora::data_structure
