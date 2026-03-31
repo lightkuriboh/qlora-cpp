@@ -33,6 +33,16 @@ namespace qlora::numeric_utility {
         }
         return mse / static_cast<double>(original.size());
     }
+
+    template <typename T>
+    double CalculateCompressionRatio(const qlora::data_structure::QuantizedData<T>& quantized_data) {
+        size_t original_bytes = quantized_data.original_data_size() * sizeof(T);
+        size_t packed_indices_bytes = (quantized_data.original_data_size() + 1) / 2;
+        size_t quantize_constants_bytes = quantized_data.num_blocks() * sizeof(T);
+        size_t total_quantized_bytes = packed_indices_bytes + quantize_constants_bytes;
+
+        return static_cast<double>(original_bytes) / static_cast<double>(total_quantized_bytes);
+    }
 }  // namespace qlora::numeric_utility
 
 
@@ -71,8 +81,8 @@ namespace qlora::core {
                     const auto prev_centroid_iterator = std::prev(it);
                     closest_centroid_index =
                         std::abs(*it - normalized_scalar) < std::abs(*prev_centroid_iterator - normalized_scalar)
-                            ? std::distance(centroids.begin(), it)
-                            : std::distance(centroids.begin(), prev_centroid_iterator);
+                            ? static_cast<size_t>(std::distance(centroids.begin(), it))
+                            : static_cast<size_t>(std::distance(centroids.begin(), prev_centroid_iterator));
                 }
                 
                 quantized_data.AssignQuantizedValue(i, static_cast<std::uint8_t>(closest_centroid_index));
@@ -85,7 +95,7 @@ namespace qlora::core {
     template<typename T>
     std::vector<T> Dequantize(const data_structure::QuantizedData<T>& quantized_data) {
         std::vector<T> dequantized_values(quantized_data.original_data_size());
-        for (size_t i = 0; i < quantized_data.original_data_size(); ++i) {
+        for (size_t i = 0; i < quantized_data.original_data_size(); i += 1) {
             const std::uint8_t quantized_index = quantized_data.GetQuantizedValue(i);
             const float centroid_value = ::qlora::nf4_constants::kNf4Centroids[quantized_index];
             const T quantize_constant = quantized_data.GetQuantizeConstant(i / quantized_data.block_size());
@@ -97,22 +107,12 @@ namespace qlora::core {
 }  // namespace qlora::core
 
 
-int main(int argc, char* argv[]) {
+int main() {
 
     size_t block_size = 64;
     size_t vector_size = 1024;
     bool is_verbose = false;
 
-    for (int i = 1; i < argc; ++i) {
-        std::string_view arg = argv[i];
-        if (arg.find("--block_size=") == 0) {
-            block_size = std::stoul(std::string(arg.substr(13)));
-        } else if (arg.find("--vector_size=") == 0) {
-            vector_size = std::stoul(std::string(arg.substr(14)));
-        } else if (arg == "--verbose") {
-            is_verbose = true;
-        }
-    }
     if (is_verbose) {
         std::cout << "Block Size: " << block_size << "\n";
         std::cout << "Vector Size: " << vector_size << "\n";
@@ -144,6 +144,9 @@ int main(int argc, char* argv[]) {
         weights_vector, dequantized_values);
 
     std::cout << "Mean Squared Error (MSE): " << mse << "\n";
+
+    const double compression_ratio = ::qlora::numeric_utility::CalculateCompressionRatio(quantized_data);
+    std::cout << "Compression Ratio: " << compression_ratio << "\n";
 
     return 0;
 }
