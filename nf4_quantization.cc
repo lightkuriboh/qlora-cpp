@@ -97,7 +97,6 @@ int main() {
     std::random_device rd;
     std::mt19937 gen(rd());
 
-    // Use PascalCase for the functions we refactored earlier.
     const auto weights_vector = ::qlora::numeric_utility::GenerateGaussianVector<float>(
         vector_size, gen, 0.0f, 1.0f);
 
