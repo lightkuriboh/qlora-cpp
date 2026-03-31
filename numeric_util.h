@@ -54,6 +54,25 @@ namespace qlora::numeric_utility
     std::uint8_t low_nibble = source_vector[actual_index] & 0x0F;
     return {high_nibble, low_nibble};
   }
+
+  template <typename T>
+  void MeanCentering(std::vector<T>& data) {
+    if (data.empty()) return;
+
+    T mean = std::accumulate(data.begin(), data.end(), T(0)) / static_cast<T>(data.size());
+    for (auto& value : data) {
+      value -= mean;
+    }
+  }
+
+  template <typename T>
+  T GetAbsMax(const std::vector<T>& data, size_t start_index, size_t end_index) {
+    T abs_max = 0.0f;
+    for (size_t i = start_index; i < end_index; ++i) {
+      abs_max = std::max(abs_max, std::abs(data[i]));
+    }
+    return abs_max;
+  }
 }  // namespace qlora::numeric_utility
 
 

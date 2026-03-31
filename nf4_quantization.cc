@@ -31,11 +31,7 @@ namespace qlora::core {
             const size_t block_start = block * block_size;
             const size_t block_end = std::min(block_start + block_size, input.size());
 
-            T abs_max = 0;
-            for (size_t i = block_start; i < block_end; ++i) {
-                abs_max = std::max(abs_max, std::abs(input[i]));
-            }
-            if (abs_max == 0) continue;
+            T abs_max = ::qlora::numeric_utility::GetAbsMax(input, block_start, block_end);
 
             quantized_data.SetQuantizeConstant(block, abs_max);
 
