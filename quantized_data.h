@@ -8,6 +8,9 @@
 #include <stdexcept>
 #include <vector>
 
+#include "numeric_util.h"
+
+
 namespace qlora::data_structure
 {
     // A class to represent quantized data.
@@ -33,14 +36,7 @@ namespace qlora::data_structure
             if (target_index >= original_data_size_) {
                 throw std::out_of_range("Index out of range for quantized values.");
             }
-            const std::size_t actual_index = target_index / 2;
-            const std::uint8_t nibble = value & 0x0F;
-
-            if (target_index % 2 == 0) {
-                weight_nf4_centroid_indices_[actual_index] = (weight_nf4_centroid_indices_[actual_index] & 0x0F) | (nibble << 4);
-            } else {
-                weight_nf4_centroid_indices_[actual_index] = (weight_nf4_centroid_indices_[actual_index] & 0xF0) | nibble;
-            }
+            ::qlora::numeric_utility::PackNibble(weight_nf4_centroid_indices_, target_index, value);
         }
 
         // Get the quantized value at a specific [target_index].
@@ -61,10 +57,7 @@ namespace qlora::data_structure
             if (target_index >= weight_nf4_centroid_indices_.size() * 2) {
                 throw std::out_of_range("Index out of range for quantized values.");
             }
-            size_t actual_index = target_index / 2;
-            std::uint8_t high_nibble = (weight_nf4_centroid_indices_[actual_index] >> 4) & 0x0F;
-            std::uint8_t low_nibble = weight_nf4_centroid_indices_[actual_index] & 0x0F;
-            return {high_nibble, low_nibble};
+            return ::qlora::numeric_utility::UnpackNibbleByte(weight_nf4_centroid_indices_, target_index);
         }
 
         // Set the quantize constant at a specific [target_index].

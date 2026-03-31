@@ -1,41 +1,16 @@
 #include <algorithm>
-#include <chrono>
 #include <iostream>
 #include <iterator>
-#include <random>
 #include <vector>
 
 #include "nf4_constants.h"
+#include "numeric_util.h"
 #include "quantized_data.h"
 
 
-namespace qlora::numeric_utility {
-    template <typename T> std::vector<T> GenerateGaussianVector(size_t target_size,
-                                                        std::mt19937& generator,
-                                                        T range_min = 0.0,
-                                                        T range_max = 1.0) {
-        std::normal_distribution<T> distribution(range_min, range_max);
-        std::vector<T> vec(target_size);
-        std::generate(vec.begin(), vec.end(), [&]() { return distribution(generator); });
-        return vec;
-    }
-
+namespace qlora::core {
     template <typename T>
-    double CalculateMeanSquaredError(const std::vector<T>& original,
-                                        const std::vector<T>& dequantized) {
-        if (original.size() != dequantized.size()) {
-            throw std::invalid_argument("Vectors must be of the same size to calculate MSE.");
-        }
-
-        double mse = 0.0;
-        for (size_t i = 0; i < original.size(); ++i) {
-            mse += std::pow(static_cast<double>(original[i]) - static_cast<double>(dequantized[i]), 2);
-        }
-        return mse / static_cast<double>(original.size());
-    }
-
-    template <typename T>
-    double CalculateCompressionRatio(const qlora::data_structure::QuantizedData<T>& quantized_data) {
+    double CalculateCompressionRatio(const ::qlora::data_structure::QuantizedData<T>& quantized_data) {
         size_t original_bytes = quantized_data.original_data_size() * sizeof(T);
         size_t packed_indices_bytes = (quantized_data.original_data_size() + 1) / 2;
         size_t quantize_constants_bytes = quantized_data.num_blocks() * sizeof(T);
@@ -43,10 +18,7 @@ namespace qlora::numeric_utility {
 
         return static_cast<double>(original_bytes) / static_cast<double>(total_quantized_bytes);
     }
-}  // namespace qlora::numeric_utility
 
-
-namespace qlora::core {
     template <typename T>
     ::qlora::data_structure::QuantizedData<T> BlockWiseNf4Quantization(const std::vector<T>& input,
                                                                        const size_t block_size) {
@@ -151,7 +123,7 @@ int main() {
 
     std::cout << "Mean Squared Error (MSE): " << mse << "\n";
 
-    const double compression_ratio = ::qlora::numeric_utility::CalculateCompressionRatio(quantized_data);
+    const double compression_ratio = ::qlora::core::CalculateCompressionRatio(quantized_data);
     std::cout << "Compression Ratio: " << compression_ratio << "\n";
 
     return 0;
