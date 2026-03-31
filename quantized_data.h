@@ -20,12 +20,14 @@ namespace qlora::data_structure
       public:
         QuantizedData(): block_size_(0), original_data_size_(0), num_blocks_(0) {};
 
-        QuantizedData(std::size_t block_size, std::size_t quantized_data_size, std::size_t quantize_constant_size)
+        QuantizedData(std::size_t block_size,
+                      std::size_t original_data_size,
+                      std::size_t num_blocks)
             : block_size_(block_size),
-              original_data_size_(quantized_data_size),
-              num_blocks_(quantize_constant_size),
-              weight_nf4_centroid_indices_((quantized_data_size + 1) / 2),
-              quantize_constants_(quantize_constant_size) {}
+              original_data_size_(original_data_size),
+              num_blocks_(num_blocks),
+              weight_nf4_centroid_indices_((original_data_size + 1) / 2),
+              quantize_constants_(num_blocks) {}
 
         std::size_t block_size() const { return block_size_; }
         std::size_t original_data_size() const { return original_data_size_; }
