@@ -3,7 +3,9 @@
 #ifndef QLORA_NF4_CONSTANTS_H_
 #define QLORA_NF4_CONSTANTS_H_
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 
 namespace qlora::nf4_constants
@@ -28,6 +30,13 @@ namespace qlora::nf4_constants
                     : static_cast<size_t>(std::distance(kNf4Centroids.begin(), prev_centroid_iterator));
         }
         return static_cast<std::uint8_t>(closest_centroid_index);
+    }
+
+    template<typename T>
+    std::uint8_t GetClosestCentroidIndex(float value, T abs_max) {
+        if (abs_max == 0) { return 7; }
+        float normalized_value = value / abs_max;
+        return GetClosestCentroidIndex(normalized_value);
     }
 }  // namespace qlora::nf4_constants
 

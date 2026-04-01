@@ -18,22 +18,48 @@ namespace qlora::data_structure
     template <typename T>
     class QuantizedData {
       public:
-        QuantizedData(): original_data_size_(0), block_size_(0), num_blocks_(0) {};
+        QuantizedData(): original_data_size_(0),
+                         block_size_(0),
+                         num_blocks_(0),
+                         quantize_constants_blocks_size_(0),
+                         num_blocks_quantized_constants_(0),
+                         weight_nf4_centroid_indices_(0),
+                         quantize_constants_nf4_centroid_indices_(0),
+                         double_quantized_constants_(0) {}
 
         QuantizedData(std::size_t original_data_size,
                       std::size_t block_size,
-                      std::size_t num_blocks)
+                      std::size_t quantize_constants_blocks_size)
             : original_data_size_(original_data_size),
               block_size_(block_size),
-              num_blocks_(num_blocks),
+              num_blocks_((original_data_size + block_size - 1) / block_size),
+              quantize_constants_blocks_size_(quantize_constants_blocks_size),
+              num_blocks_quantized_constants_((num_blocks_ + quantize_constants_blocks_size - 1) / quantize_constants_blocks_size),
               weight_nf4_centroid_indices_((original_data_size + 1) / 2),
-              quantize_constants_(num_blocks) {}
+              quantize_constants_nf4_centroid_indices_((num_blocks_ + 1) / 2),
+              double_quantized_constants_(
+                ((original_data_size + block_size - 1) / block_size + quantize_constants_blocks_size - 1) /
+                    quantize_constants_blocks_size) {}
 
 
         std::size_t original_data_size() const { return original_data_size_; }
         std::size_t block_size() const { return block_size_; }
         std::size_t num_blocks() const { return num_blocks_; }
+        std::size_t quantize_constants_blocks_size() const { return quantize_constants_blocks_size_; }
+        std::size_t num_blocks_quantized_constants() const { return num_blocks_quantized_constants_; }
+        T quantize_constant_mean() const { return quantize_constant_mean_; }
 
+        // Set quantize constant mean for mean centering.
+        void SetQuantizeConstantMean(T mean) { quantize_constant_mean_ = mean; }
+
+
+        // Get both high and low nibbles as a pair for a specific [target_index] in the original data.
+        std::pair<std::uint8_t, std::uint8_t> GetNf4CentroidIndicesPair(size_t target_index) const {
+            if (target_index >= weight_nf4_centroid_indices_.size() * 2) {
+                throw std::out_of_range("Index out of range for quantized values.");
+            }
+            return ::qlora::numeric_utility::UnpackNibbleByte(weight_nf4_centroid_indices_, target_index);
+        }
 
         // Assign 4-bit quantized_value to a specific [target_index].
         void AssignQuantizedValue(size_t target_index, std::uint8_t value) {
@@ -43,50 +69,55 @@ namespace qlora::data_structure
             ::qlora::numeric_utility::PackNibble(weight_nf4_centroid_indices_, target_index, value);
         }
 
-        // Get the quantized value at a specific [target_index].
-        std::uint8_t GetNf4CentroidIndex(size_t target_index) const {
-            if (target_index >= weight_nf4_centroid_indices_.size() * 2) {
-                throw std::out_of_range("Index out of range for quantized values.");
+        // Get both high and low nibbles as a pair for a specific [target_index] in the original data.
+        std::uint8_t GetQuantizeConstantNf4CentroidIndex(size_t block_index) const {
+            if (block_index >= num_blocks_) {
+                throw std::out_of_range("Index out of range for quantize constants.");
             }
-            size_t actual_index = target_index / 2;
-            if (target_index % 2 == 0) {
-                return (weight_nf4_centroid_indices_[actual_index] >> 4) & 0x0F;
+            size_t target_index = block_index / 2;
+            if (block_index % 2 == 0) {
+                return ::qlora::numeric_utility::GetHighNibble(quantize_constants_nf4_centroid_indices_[target_index]);
             } else {
-                return weight_nf4_centroid_indices_[actual_index] & 0x0F;
+                return ::qlora::numeric_utility::GetLowNibble(quantize_constants_nf4_centroid_indices_[target_index]);
             }
         }
 
-        // Get both high and low nibbles as a pair for a specific [target_index].
-        std::pair<std::uint8_t, std::uint8_t> GetNf4CentroidIndicesPair(size_t target_index) const {
-            if (target_index >= weight_nf4_centroid_indices_.size() * 2) {
-                throw std::out_of_range("Index out of range for quantized values.");
-            }
-            return ::qlora::numeric_utility::UnpackNibbleByte(weight_nf4_centroid_indices_, target_index);
-        }
-
-        // Set the quantize constant at a specific [target_index].
-        void SetQuantizeConstant(size_t target_index, T value) {
-            if (target_index >= quantize_constants_.size()) {
+        // Set the quantize constant NF4 centroid index at a specific [target_index] in the quantize constants centroids.
+        void SetQuantizeConstantNf4CentroidIndex(size_t target_index, std::uint8_t value) {
+            if (target_index >= quantize_constants_nf4_centroid_indices_.size() * 2) {
                 throw std::out_of_range("Index out of range for quantize constants.");
             }
-            quantize_constants_[target_index] = value;
+            ::qlora::numeric_utility::PackNibble(quantize_constants_nf4_centroid_indices_, target_index, value);
         }
 
-        // Get the quantize constant at a specific [target_index].
-        T GetQuantizeConstant(size_t target_index) const {
-            if (target_index >= quantize_constants_.size()) {
+        // Get the double quantize constant for a specific [target_index] in the original data.
+        T GetDoubleQuantizeConstant(size_t original_data_index) const {
+            size_t target_index = original_data_index / block_size() / quantize_constants_blocks_size();
+            if (target_index >= double_quantized_constants_.size()) {
                 throw std::out_of_range("Index out of range for quantize constants.");
             }
-            return quantize_constants_[target_index];
+            return double_quantized_constants_[target_index];
+        }
+
+        // Set the doubled quantize constant at a specific [target_index] in the double quantized constants.
+        void SetDoubleQuantizeConstant(size_t target_index, T value) {
+            if (target_index >= double_quantized_constants_.size()) {
+                throw std::out_of_range("Index out of range for quantize constants.");
+            }
+            double_quantized_constants_[target_index] = value;
         }
 
       private:
         std::size_t original_data_size_;
         std::size_t block_size_;
         std::size_t num_blocks_;
+        std::size_t quantize_constants_blocks_size_;
+        std::size_t num_blocks_quantized_constants_;
+        T quantize_constant_mean_;
 
         std::vector<std::uint8_t> weight_nf4_centroid_indices_;
-        std::vector<T> quantize_constants_;
+        std::vector<std::uint8_t> quantize_constants_nf4_centroid_indices_;
+        std::vector<T> double_quantized_constants_;
     };
 }  // namespace qlora::data_structure
 

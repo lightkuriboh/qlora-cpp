@@ -12,20 +12,25 @@ namespace qlora::core {
     template <typename T>
     double CalculateCompressionRatio(const ::qlora::data_structure::QuantizedData<T>& quantized_data) {
         size_t original_bytes = quantized_data.original_data_size() * sizeof(T);
-        size_t packed_indices_bytes = (quantized_data.original_data_size() + 1) / 2;
-        size_t quantize_constants_bytes = quantized_data.num_blocks() * sizeof(T);
-        size_t total_quantized_bytes = packed_indices_bytes + quantize_constants_bytes;
+        size_t packed_indices_bytes = (quantized_data.original_data_size() + 1) / 2 * sizeof(std::uint8_t);
+        size_t double_quantize_constant_indices_bytes = (quantized_data.num_blocks() + 1) / 2 * sizeof(std::uint8_t);
+        size_t double_quantize_constants_bytes = quantized_data.num_blocks_quantized_constants() * sizeof(T);
+        size_t total_quantized_bytes = packed_indices_bytes + double_quantize_constant_indices_bytes + double_quantize_constants_bytes + sizeof(T);  // + sizeof(T) for quantize constant mean
 
         return static_cast<double>(original_bytes) / static_cast<double>(total_quantized_bytes);
     }
 
     template <typename T>
     ::qlora::data_structure::QuantizedData<T> BlockWiseNf4Quantization(const std::vector<T>& input,
-                                                                       const size_t block_size) {
+                                                                       const size_t block_size,
+                                                                       const size_t quantize_constants_blocks_size) {
         if (input.empty()) return {};
 
-        auto num_blocks = (input.size() + block_size - 1) / block_size;
-        ::qlora::data_structure::QuantizedData<T> quantized_data(input.size(), block_size, num_blocks);
+        ::qlora::data_structure::QuantizedData<T> quantized_data(input.size(), block_size, quantize_constants_blocks_size);
+
+        size_t num_blocks = (input.size() + block_size - 1) / block_size;
+        size_t num_blocks_quantized_constants = (num_blocks + quantize_constants_blocks_size - 1) / quantize_constants_blocks_size;
+        std::vector<T> quantize_constants(num_blocks);
 
         for (size_t block = 0; block < num_blocks; ++block) {
             const size_t block_start = block * block_size;
@@ -33,15 +38,29 @@ namespace qlora::core {
 
             T abs_max = ::qlora::numeric_utility::GetAbsMax(input, block_start, block_end);
 
-            quantized_data.SetQuantizeConstant(block, abs_max);
+            quantize_constants[block] = abs_max;
 
             for (size_t i = block_start; i < block_end; ++i) {
-                const auto normalized_scalar = input[i] / abs_max;
-                quantized_data.AssignQuantizedValue(
-                    i,
-                    static_cast<std::uint8_t>(::qlora::nf4_constants::GetClosestCentroidIndex(normalized_scalar)));
+                std::uint8_t closest_centroid_index = static_cast<std::uint8_t>(
+                    ::qlora::nf4_constants::GetClosestCentroidIndex<T>(input[i], abs_max));
+                quantized_data.AssignQuantizedValue(i, closest_centroid_index);
             }
+        }
 
+        T quantize_constant_mean = ::qlora::numeric_utility::MeanCentering(quantize_constants);
+        quantized_data.SetQuantizeConstantMean(quantize_constant_mean);
+
+        for (size_t double_quantize_block = 0; double_quantize_block < num_blocks_quantized_constants; ++double_quantize_block) {
+            const size_t block_start = double_quantize_block * quantize_constants_blocks_size;
+            const size_t block_end = std::min(block_start + quantize_constants_blocks_size, num_blocks);
+            T abs_max = ::qlora::numeric_utility::GetAbsMax(quantize_constants, block_start, block_end);
+            quantized_data.SetDoubleQuantizeConstant(double_quantize_block, abs_max);
+
+            for (size_t i = block_start; i < block_end; ++i) {
+                std::uint8_t closest_centroid_index = static_cast<std::uint8_t>(
+                    ::qlora::nf4_constants::GetClosestCentroidIndex<T>(quantize_constants[i], abs_max));
+                quantized_data.SetQuantizeConstantNf4CentroidIndex(i, closest_centroid_index);
+            }
         }
         return quantized_data;
     }
@@ -50,16 +69,22 @@ namespace qlora::core {
     std::vector<T> Dequantize(const data_structure::QuantizedData<T>& quantized_data) {
         std::vector<T> dequantized_values(quantized_data.original_data_size());
         for (size_t i = 0; i < quantized_data.original_data_size(); i += 2) {
-            const auto [high_nibble, low_nibble] = quantized_data.GetNf4CentroidIndicesPair(i);
+            const auto [high_nibble_centroid_index, low_nibble_centroid_index] = quantized_data.GetNf4CentroidIndicesPair(i);
 
-            const float high_nibble_centroid_value = ::qlora::nf4_constants::kNf4Centroids[high_nibble];
-            const T quantize_constant_i = quantized_data.GetQuantizeConstant(i / quantized_data.block_size());
-            dequantized_values[i] = static_cast<T>(quantize_constant_i * high_nibble_centroid_value);
+            size_t current_block_i = i / quantized_data.block_size();
+            const T quantize_constant_i = quantized_data.GetDoubleQuantizeConstant(i) *
+                                          ::qlora::nf4_constants::kNf4Centroids[quantized_data.GetQuantizeConstantNf4CentroidIndex(current_block_i)] +
+                                          quantized_data.quantize_constant_mean();
+            dequantized_values[i] = static_cast<T>(quantize_constant_i * ::qlora::nf4_constants::kNf4Centroids[high_nibble_centroid_index]);
             
-            const float low_nibble_centroid_value = ::qlora::nf4_constants::kNf4Centroids[low_nibble];            
             if (i + 1 < quantized_data.original_data_size()) {
-                const T quantize_constant_i_plus_1 = quantized_data.GetQuantizeConstant(i / quantized_data.block_size());
-                dequantized_values[i + 1] = static_cast<T>(quantize_constant_i_plus_1 * low_nibble_centroid_value);
+                size_t current_block_i_plus_1 = (i + 1) / quantized_data.block_size();
+                const T quantize_constant_i_plus_1 = current_block_i == current_block_i_plus_1
+                                                     ? quantize_constant_i
+                                                     : quantized_data.GetDoubleQuantizeConstant(i + 1) *
+                                                         ::qlora::nf4_constants::kNf4Centroids[quantized_data.GetQuantizeConstantNf4CentroidIndex(current_block_i_plus_1)] +
+                                                       quantized_data.quantize_constant_mean();
+                dequantized_values[i + 1] = static_cast<T>(quantize_constant_i_plus_1 * ::qlora::nf4_constants::kNf4Centroids[low_nibble_centroid_index]);
             }
         }
         return dequantized_values;
@@ -69,8 +94,9 @@ namespace qlora::core {
 
 int main() {
 
-    size_t block_size = 64;
     size_t vector_size = 1 << 16;
+    size_t block_size = 64;
+    size_t quantize_constants_blocks_size = 256;
     bool is_verbose = false;
 
     if (is_verbose) {
@@ -87,14 +113,24 @@ int main() {
         vector_size, gen, 0.0f, 1.0f);
 
     if (is_verbose) {
-    std::cout << "Original Weights Sample (first 5):\n";
-    for (size_t i = 0; i < std::min<size_t>(5, weights_vector.size()); ++i) {
-        std::cout << weights_vector[i] << "\n";
-    }
+        std::cout << "Original Weights Sample (first 5):\n";
+        for (size_t i = 0; i < std::min<size_t>(5, weights_vector.size()); ++i) {
+            std::cout << weights_vector[i] << "\n";
+        }
     }
 
     const auto quantized_data =
-        ::qlora::core::BlockWiseNf4Quantization<float>(weights_vector, block_size);
+        ::qlora::core::BlockWiseNf4Quantization<float>(weights_vector, block_size, quantize_constants_blocks_size);
+
+    if (is_verbose) {
+        std::cout << "Number of Blocks (aka number of quantize constants indices): " << quantized_data.num_blocks() << "\n";
+        std::cout << "Number of Quantize Constants: " << quantized_data.num_blocks_quantized_constants() << "\n";
+        std::cout << "Quantize Constant Mean: " << quantized_data.quantize_constant_mean() << "\n";
+        std::cout << "Sample Quantize Constant (first 5):\n";
+        for (size_t i = 0; i < std::min<size_t>(5, quantized_data.num_blocks_quantized_constants()); ++i) {
+            std::cout << quantized_data.GetDoubleQuantizeConstant(i) << "\n";
+        }
+    }
 
     const auto dequantized_values =
         ::qlora::core::Dequantize<float>(quantized_data);
