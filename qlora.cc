@@ -1,7 +1,7 @@
 #include <algorithm>
 #include <iostream>
-#include <iterator>
 #include <random>
+#include <span>
 #include <vector>
 
 #include "nf4_constants.h"
@@ -51,7 +51,9 @@ template <typename T>
     const size_t block_end = std::min(block_start + block_size, input.size());
 
     const T abs_max =
-        ::qlora::numeric_utility::GetAbsMax(input, block_start, block_end);
+        ::qlora::numeric_utility::GetAbsMax(
+            std::span<const T>{input}
+                .subspan(block_start, block_end - block_start + 1));
 
     quantize_constants[block] = abs_max;
     for (size_t i = block_start; i < block_end; ++i) {
@@ -72,7 +74,9 @@ template <typename T>
     const size_t block_end =
         std::min(block_start + quantize_constants_blocks_size, num_blocks);
     const T abs_max =
-        ::qlora::numeric_utility::GetAbsMax(quantize_constants, block_start, block_end);
+        ::qlora::numeric_utility::GetAbsMax(
+            std::span<const T>{quantize_constants}
+                .subspan(block_start, block_end - block_start + 1));
     quantized_data.SetDoubleQuantizeConstant(double_quantize_block, abs_max);
 
     for (size_t i = block_start; i < block_end; ++i) {
