@@ -2,7 +2,6 @@
 #ifndef QLORA_CPP_MATRIX_H
 #define QLORA_CPP_MATRIX_H
 
-#include <cstdint>
 #include <optional>
 #include <random>
 #include <stdexcept>
@@ -37,10 +36,11 @@ class Matrix
     return matrix_[row * num_cols() + col];
   }
 
-  void FilLGaussianMatrix(std::mt19937 generator, T mean = 0.0, T stddev = 1.0) {
+  void FilLGaussianMatrix(std::mt19937& generator, T mean = 0.0, T stddev = 1.0) {
     for (size_t i = 0; i < num_rows_; ++i) {
       ::qlora::numeric_utility::FillGaussianVector(
-        std::span{matrix_}.subspan(i * num_cols_, num_cols_), mean, stddev);
+        std::span{matrix_}.subspan(i * num_cols_, num_cols_),
+        generator, mean, stddev);
     }
   }
 private:
