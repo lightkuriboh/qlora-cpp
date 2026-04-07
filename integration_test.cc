@@ -2,7 +2,7 @@
 #include <random>
 #include <vector>
 
-#include "qlora.cc"
+#include "qlora.h"
 
 namespace qlora::core {
 

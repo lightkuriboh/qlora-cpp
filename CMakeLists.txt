@@ -11,20 +11,19 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(googletest)
 
-add_library(qlora_core
-        qlora.cc
-)
-target_include_directories(qlora_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+add_library(qlora_core INTERFACE)
+target_include_directories(qlora_core INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+target_sources(qlora_core INTERFACE qlora.h)
 
 add_executable(qlora_cpp main.cc)
 target_link_libraries(qlora_cpp PRIVATE qlora_core)
 
-add_executable(qlora_integration_test qlora_integration_test.cc)
-target_link_libraries(qlora_integration_test
+add_executable(integration_test integration_test.cc)
+target_link_libraries(integration_test
         PRIVATE
         qlora_core
         gtest_main  # Automatically provides a main() function for tests
 )
 
 include(GoogleTest)
-gtest_discover_tests(qlora_integration_test)
+gtest_discover_tests(integration_test)

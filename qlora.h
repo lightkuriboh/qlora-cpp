@@ -1,3 +1,8 @@
+// qlora.h
+
+#ifndef QLORA_QLORA_H_
+#define QLORA_QLORA_H_
+
 #include <algorithm>
 #include <iostream>
 #include <span>
@@ -11,7 +16,7 @@
 namespace qlora::core {
 
 template <typename T>
-double CalculateCompressionRatio(
+inline double CalculateCompressionRatio(
       const ::qlora::data_structure::QuantizedData<T>& quantized_data) {
   const size_t original_bytes = quantized_data.original_data_size() * sizeof(T);
   const size_t packed_indices_bytes =
@@ -31,7 +36,7 @@ double CalculateCompressionRatio(
 }
 
 template <typename T>
-::qlora::data_structure::QuantizedData<T> BlockWiseNf4Quantization(
+inline ::qlora::data_structure::QuantizedData<T> BlockWiseNf4Quantization(
     const std::vector<T>& input, const size_t block_size,
     const size_t quantize_constants_blocks_size) {
   if (input.empty()) return {};
@@ -89,7 +94,7 @@ template <typename T>
 }
 
 template<typename T>
-std::vector<T> Dequantize(const data_structure::QuantizedData<T>& quantized_data) {
+inline std::vector<T> Dequantize(const data_structure::QuantizedData<T>& quantized_data) {
   std::vector<T> dequantized_values(quantized_data.original_data_size());
   for (size_t i = 0; i < quantized_data.original_data_size(); i += 2) {
     const auto [high_nibble_centroid_index, low_nibble_centroid_index] =
@@ -123,3 +128,5 @@ std::vector<T> Dequantize(const data_structure::QuantizedData<T>& quantized_data
 }
 
 }  // namespace qlora::core
+
+#endif  // QLORA_QLORA_H_

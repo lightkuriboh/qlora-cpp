@@ -1,5 +1,5 @@
 
-#include "qlora.cc"
+#include "qlora.h"
 
 
 int main() {
