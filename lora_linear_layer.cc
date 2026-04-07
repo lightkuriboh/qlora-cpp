@@ -25,8 +25,10 @@ void LoRALinearLayer<T>::ApplyQuantizedWeights(const ::qlora::data_structure::Ma
 
   for (size_t b = 0; b < batch_size; ++b) {
     for (size_t o = 0; o < out_features_dim; ++o) {
+      T quantize_scale = 0;
       for (size_t i = 0; i < in_features_dim; ++i) {
         const size_t weight_index = o * in_features_dim + i;
+        // Potentially get packed nibbles and bit shift to get them instead of getting every time
         const uint8_t nf4_index = (weight_index % 2 == 0)
                                       ? base_weights_.GetNf4CentroidIndicesPair(weight_index).first
                                       : base_weights_.GetNf4CentroidIndicesPair(weight_index - 1).second;
@@ -34,11 +36,14 @@ void LoRALinearLayer<T>::ApplyQuantizedWeights(const ::qlora::data_structure::Ma
         const float weight_centroid = ::qlora::nf4_constants::kNf4Centroids[nf4_index];
         const size_t block_index = weight_index / base_weights_.block_size();
 
-        const uint8_t const_nf4_idx = base_weights_.GetQuantizeConstantNf4CentroidIndex(block_index);
-        const float quantize_constant_centroid = qlora::nf4_constants::kNf4Centroids[const_nf4_idx];
-        const T doubled_quantize_constant = base_weights_.GetDoubleQuantizeConstant(weight_index);
-        const T quantize_scale = (doubled_quantize_constant * quantize_constant_centroid)
-                                  + base_weights_.quantize_constant_mean();
+        if (weight_index % base_weights_.block_size() == 0) {
+          const uint8_t const_nf4_idx = base_weights_.GetQuantizeConstantNf4CentroidIndex(block_index);
+          const float quantize_constant_centroid = qlora::nf4_constants::kNf4Centroids[const_nf4_idx];
+          const T doubled_quantize_constant = base_weights_.GetDoubleQuantizeConstant(weight_index);
+          quantize_scale = (doubled_quantize_constant * quantize_constant_centroid)
+                               + base_weights_.quantize_constant_mean();
+        }
+
         const T dequantized_w = static_cast<T>(quantize_scale * weight_centroid);
         output_y[b, o] += input_x[b, i] * dequantized_w;
       }
