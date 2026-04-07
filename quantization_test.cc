@@ -6,7 +6,7 @@
 
 namespace qlora::core {
 
-class QLoraIntegrationTest : public ::testing::Test {
+class QLoraQuantizationTest : public ::testing::Test {
 protected:
   const size_t kVectorSize = 1 << 16;
   const size_t kBlockSize = 64;
@@ -14,7 +14,7 @@ protected:
   const int kIterations = 10;
 };
 
-TEST_F(QLoraIntegrationTest, AccuracyAndCompressionCheck) {
+TEST_F(QLoraQuantizationTest, AccuracyAndCompressionCheck) {
   std::random_device rd;
   std::mt19937 gen(rd());
 

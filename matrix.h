@@ -11,12 +11,13 @@
 namespace qlora::data_structure
 {
 
+// A flat-backed 2D matrix optimized for contiguous memory access.
 template <typename T>
 class Matrix
 {
  public:
   Matrix() = default;
-  Matrix(const size_t num_rows, const size_t num_cols)
+  Matrix(size_t num_rows, size_t num_cols)
       : num_rows_(num_rows), num_cols_(num_cols),
         matrix_(num_rows * num_cols, 0) {}
 
@@ -26,11 +27,11 @@ class Matrix
   T* data() { return matrix_.data(); }
   const T* data() const { return matrix_.data(); }
 
-  inline T& operator[](const size_t row, const size_t col) {
+  inline T& operator[](size_t row, size_t col) {
     return matrix_[row * num_cols() + col];
   }
 
-  inline const T& operator[](const size_t row, const size_t col) const {
+  inline const T& operator[](size_t row, size_t col) const {
     return matrix_[row * num_cols() + col];
   }
 
@@ -41,6 +42,7 @@ class Matrix
         generator, mean, stddev);
     }
   }
+
 private:
   size_t num_rows_;
   size_t num_cols_;

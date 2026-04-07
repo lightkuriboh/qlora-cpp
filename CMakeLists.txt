@@ -1,31 +1,41 @@
 cmake_minimum_required(VERSION 4.0)
 project(qlora_cpp)
 
+# Global C++ Standard Settings
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Setup GoogleTest
 include(FetchContent)
 FetchContent_Declare(
         googletest
         URL https://github.com/google/googletest/archive/refs/heads/main.zip
 )
+# For GTest, we typically want to disable its internal warnings to keep our build clean
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
-add_library(qlora_core INTERFACE
-        lora_linear_layer.cc lora_linear_layer.h
-)
+# Define the Core Library
+add_library(qlora_core INTERFACE)
 target_include_directories(qlora_core INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
-target_sources(qlora_core INTERFACE qlora.h)
+# Requires C++23 features for this library and its consumers
+target_compile_features(qlora_core INTERFACE cxx_std_23)
 
+# Main Executable
 add_executable(qlora_cpp main.cc)
 target_link_libraries(qlora_cpp PRIVATE qlora_core)
 
-add_executable(integration_test integration_test.cc)
-target_link_libraries(integration_test
+# Testing
+add_executable(all_tests
+        quantization_test.cc
+        lora_forward_test.cc)
+target_link_libraries(all_tests
         PRIVATE
         qlora_core
         gtest_main  # Automatically provides a main() function for tests
 )
 
+# Enable automatic test discovery
 include(GoogleTest)
-gtest_discover_tests(integration_test)
+gtest_discover_tests(all_tests)
