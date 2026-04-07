@@ -11,7 +11,9 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(googletest)
 
-add_library(qlora_core INTERFACE)
+add_library(qlora_core INTERFACE
+        lora_linear_layer.cc lora_linear_layer.h
+)
 target_include_directories(qlora_core INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 target_sources(qlora_core INTERFACE qlora.h)
 

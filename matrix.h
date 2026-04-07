@@ -2,9 +2,7 @@
 #ifndef QLORA_CPP_MATRIX_H
 #define QLORA_CPP_MATRIX_H
 
-#include <optional>
 #include <random>
-#include <stdexcept>
 #include <vector>
 
 #include "numeric_util.h"
@@ -20,7 +18,7 @@ class Matrix
   Matrix() = default;
   Matrix(const size_t num_rows, const size_t num_cols)
       : num_rows_(num_rows), num_cols_(num_cols),
-        matrix_(num_rows * num_cols) {}
+        matrix_(num_rows * num_cols, 0) {}
 
   size_t num_rows() const { return num_rows_; }
   size_t num_cols() const { return num_cols_; }
@@ -36,7 +34,7 @@ class Matrix
     return matrix_[row * num_cols() + col];
   }
 
-  void FilLGaussianMatrix(std::mt19937& generator, T mean = 0.0, T stddev = 1.0) {
+  void FillGaussianMatrix(std::mt19937& generator, T mean = 0.0, T stddev = 1.0) {
     for (size_t i = 0; i < num_rows_; ++i) {
       ::qlora::numeric_utility::FillGaussianVector(
         std::span{matrix_}.subspan(i * num_cols_, num_cols_),
