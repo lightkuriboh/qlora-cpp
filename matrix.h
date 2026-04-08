@@ -21,6 +21,23 @@ class Matrix
       : num_rows_(num_rows), num_cols_(num_cols),
         matrix_(num_rows * num_cols, 0) {}
 
+  Matrix(const Matrix& other)
+      : num_rows_(other.num_rows_),
+        num_cols_(other.num_cols_),
+        matrix_(other.matrix_) {}
+
+  Matrix& operator=(const Matrix& other) {
+    if (this != &other) {
+      num_rows_ = other.num_rows_;
+      num_cols_ = other.num_cols_;
+      matrix_ = other.matrix_;
+    }
+    return *this;
+  }
+
+  Matrix(Matrix&& other) noexcept = default;
+  Matrix& operator=(Matrix&& other) noexcept = default;
+
   size_t num_rows() const { return num_rows_; }
   size_t num_cols() const { return num_cols_; }
 

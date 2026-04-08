@@ -40,7 +40,19 @@ class LoRALinearLayer {
     ApplyQuantizedWeights(input_x, output_y);
     ApplyLoRAAdapters(input_x, output_y);
 
+    MakeCopyOfInput(input_x);
     return output_y;
+  }
+
+  ::qlora::data_structure::Matrix<T> Backward(const ::qlora::data_structure::Matrix<T>& grad_output) {
+    auto delta_z = CalculateDeltaZ(grad_output);
+    auto delta_b = CalculateDeltaB(grad_output);
+    auto delta_a = CalculateDeltaA(delta_z);
+
+    const size_t batch_size = grad_output.num_rows();
+    ::qlora::data_structure::Matrix<T> delta_x(batch_size, in_features_dim_);
+    // Calculate delta_x goes here
+    return std::move(delta_x);
   }
 
  private:
@@ -87,11 +99,11 @@ class LoRALinearLayer {
     const size_t rank = rank_;
 
     // X(batch_size, in) * A^T(in, rank) -> Z(batch_size, rank)
-    ::qlora::data_structure::Matrix<T> temp_z (batch_size, rank);
+    temp_z_ = ::qlora::data_structure::Matrix<T>(batch_size, rank);
     for (size_t b = 0; b < batch_size; ++b) {
       for (size_t r = 0; r < rank; ++r) {
         for (size_t i = 0; i < in_features_dim; ++i) {
-          temp_z[b, r] += input_x[b, i] * matrix_a_[r, i];
+          temp_z_[b, r] += input_x[b, i] * matrix_a_[r, i];
         }
       }
     }
@@ -101,11 +113,64 @@ class LoRALinearLayer {
       for (size_t o = 0; o < out_features_dim; ++o) {
         T sum = 0;
         for (size_t r = 0; r < rank; ++r) {
-          sum += temp_z[b, r] * matrix_b_[r, o];
+          sum += temp_z_[b, r] * matrix_b_[r, o];
         }
         output_y[b, o] += sum * static_cast<T>(scaling_);
       }
     }
+  }
+
+  void MakeCopyOfInput(const ::qlora::data_structure::Matrix<T>& input_x) {
+    input_x_copy_ = input_x;
+  }
+
+  ::qlora::data_structure::Matrix<T> CalculateDeltaZ(const ::qlora::data_structure::Matrix<T>& grad_output) {
+    // grad(batch_size, out) * B(out, rank) -> deltaZ(batch_size, rank)
+    const size_t batch_size = grad_output.num_rows();
+    const size_t out_features_dim = grad_output.num_cols();
+    ::qlora::data_structure::Matrix<T> delta_z(batch_size, rank_);
+    for (size_t b = 0; b < batch_size; ++b) {
+      for (size_t r = 0; r < rank_; ++r) {
+        T sum = 0;
+        for (size_t o = 0; o < out_features_dim; ++o) {
+          sum += grad_output[b, o] * matrix_b_[o, r];
+        }
+        delta_z[b, r] = static_cast<T>(scaling_) * sum;
+      }
+    }
+    return std::move(delta_z);
+  }
+
+  ::qlora::data_structure::Matrix<T> CalculateDeltaB(const ::qlora::data_structure::Matrix<T>& grad_output) {
+    // grad^T(out, batch_size) * Z(batch_size, rank) -> deltaB(out, rank)
+    const size_t batch_size = grad_output.num_rows();
+    const size_t out_features_dim = grad_output.num_cols();
+    ::qlora::data_structure::Matrix<T> delta_b(out_features_dim, rank_);
+    for (size_t o = 0; o < out_features_dim; ++o) {
+      for (size_t r = 0; r < rank_; ++r) {
+        T sum = 0;
+        for (size_t b = 0; b < batch_size; ++b) {
+          sum += grad_output[b, o] * temp_z_[b, r];
+        }
+        delta_b[o, r] = static_cast<T>(scaling_) * sum;
+      }
+    }
+    return std::move(delta_b);
+  }
+
+  ::qlora::data_structure::Matrix<T> CalculateDeltaA(const ::qlora::data_structure::Matrix<T>& delta_z) {
+    // deltaZ^T(rank, batch_size) * input_x(batch_size, in) -> deltaA(rank, in)
+    const size_t batch_size = delta_z.num_rows();
+    const size_t in_features_dim = input_x_copy_.num_cols();
+    ::qlora::data_structure::Matrix<T> delta_a(rank_, in_features_dim);
+    for (size_t r = 0; r < rank_; ++r) {
+      for (size_t b = 0; b < batch_size; ++b) {
+        for (size_t i = 0; i < in_features_dim; ++i) {
+          delta_a[r, i] += delta_z[b, r] * input_x_copy_[b, i];
+        }
+      }
+    }
+    return std::move(delta_a);
   }
 
   size_t in_features_dim_;
@@ -118,6 +183,9 @@ class LoRALinearLayer {
 
   ::qlora::data_structure::Matrix<T> matrix_a_;
   ::qlora::data_structure::Matrix<T> matrix_b_;
+
+  ::qlora::data_structure::Matrix<T> input_x_copy_;
+  ::qlora::data_structure::Matrix<T> temp_z_;
 };
 
 }  // qlora::lora
