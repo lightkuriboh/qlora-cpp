@@ -29,7 +29,8 @@ target_link_libraries(qlora_cpp PRIVATE qlora_core)
 # Testing
 add_executable(all_tests
         quantization_test.cc
-        lora_linear_layer_test.cc)
+        lora_linear_layer_test.cc
+        matmul.h)
 target_link_libraries(all_tests
         PRIVATE
         qlora_core

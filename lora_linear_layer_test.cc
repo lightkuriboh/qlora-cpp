@@ -1,6 +1,7 @@
 #include "lora_linear_layer.h"
 
 #include <gtest/gtest.h>
+#include <iostream>
 #include <random>
 #include <vector>
 
@@ -44,7 +45,7 @@ TEST_F(LoRALinearLayerTest, StepReducesLoss) {
   constexpr size_t num_iterations = 10;
   for (size_t i = 0; i < num_iterations; ++i) {
     auto pred = layer.Forward(input);
-    const float loss_before = CalculateMSE(pred, target);
+    const float loss_before_grad = CalculateMSE(pred, target);
 
     // Calculate Gradient of MSE: 2 * (pred - target) / N
     Matrix<float> grad_output(1, kOutDim);
@@ -56,6 +57,7 @@ TEST_F(LoRALinearLayerTest, StepReducesLoss) {
     layer.Step(0.01f);
 
     const float loss_after_grad = CalculateMSE(layer.Forward(input), target);
-    EXPECT_LT(loss_after_grad, loss_before) << "Optimization step failed to reduce loss.";
+    std::cout << loss_before_grad << " " << loss_after_grad << std::endl;
+    EXPECT_LT(loss_after_grad, loss_before_grad) << "Optimization step failed to reduce loss.";
   }
 }

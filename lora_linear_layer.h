@@ -3,6 +3,7 @@
 #ifndef QLORA_LORA_LINEAR_LAYER_H_
 #define QLORA_LORA_LINEAR_LAYER_H_
 
+#include "matmul.h"
 #include "matrix.h"
 #include "quantized_data.h"
 
@@ -101,31 +102,13 @@ class LoRALinearLayer {
 
   void ApplyLoRAAdapters(const ::qlora::data_structure::Matrix<T>& input_x,
   ::qlora::data_structure::Matrix<T>& output_y) {
-    const size_t batch_size = input_x.num_rows();
-    const size_t in_features_dim = input_x.num_cols();
-    const size_t out_features_dim = out_features_dim_;
-    const size_t rank = rank_;
-
     // X(batch_size, in) * A^T(in, rank) -> Z(batch_size, rank)
-    temp_z_ = ::qlora::data_structure::Matrix<T>(batch_size, rank);
-    for (size_t b = 0; b < batch_size; ++b) {
-      for (size_t r = 0; r < rank; ++r) {
-        for (size_t i = 0; i < in_features_dim; ++i) {
-          temp_z_[b, r] += input_x[b, i] * matrix_a_[r, i];
-        }
-      }
-    }
+    temp_z_ = ::qlora::data_structure::Matrix<T>(input_x.num_rows(), rank_);
+    ::qlora::ops::MatMul(input_x, false, matrix_a_, true, temp_z_);
 
     // Z(batch_size, rank) * B^T(rank, out) -> output_y(batch_size, out)
-    for (size_t b = 0; b < batch_size; ++b) {
-      for (size_t o = 0; o < out_features_dim; ++o) {
-        T sum = 0;
-        for (size_t r = 0; r < rank; ++r) {
-          sum += temp_z_[b, r] * matrix_b_[o, r];
-        }
-        output_y[b, o] += sum * static_cast<T>(scaling_);
-      }
-    }
+    ::qlora::ops::MatMul(temp_z_, false, matrix_b_, true, output_y,
+                    static_cast<T>(scaling_), static_cast<T>(1.0f));
   }
 
   void MakeCopyOfInput(const ::qlora::data_structure::Matrix<T>& input_x) {
@@ -134,50 +117,24 @@ class LoRALinearLayer {
 
   ::qlora::data_structure::Matrix<T> CalculateGradZ(const ::qlora::data_structure::Matrix<T>& grad_output) {
     // grad_out(batch_size, out) * B(out, rank) -> gradZ(batch_size, rank)
-    const size_t batch_size = grad_output.num_rows();
-    const size_t out_features_dim = grad_output.num_cols();
-    ::qlora::data_structure::Matrix<T> grad_z(batch_size, rank_);
-    for (size_t b = 0; b < batch_size; ++b) {
-      for (size_t r = 0; r < rank_; ++r) {
-        T sum = 0;
-        for (size_t o = 0; o < out_features_dim; ++o) {
-          sum += grad_output[b, o] * matrix_b_[o, r];
-        }
-        grad_z[b, r] = static_cast<T>(scaling_) * sum;
-      }
-    }
+    ::qlora::data_structure::Matrix<T> grad_z(grad_output.num_rows(), rank_);
+    ::qlora::ops::MatMul(grad_output, false, matrix_b_, false, grad_z,
+                    static_cast<T>(scaling_));
     return std::move(grad_z);
   }
 
   ::qlora::data_structure::Matrix<T> CalculateGradB(const ::qlora::data_structure::Matrix<T>& grad_output) {
     // grad_out^T(out, batch_size) * Z(batch_size, rank) -> gradB(out, rank)
-    const size_t batch_size = grad_output.num_rows();
-    const size_t out_features_dim = grad_output.num_cols();
-    ::qlora::data_structure::Matrix<T> grad_b(out_features_dim, rank_);
-    for (size_t o = 0; o < out_features_dim; ++o) {
-      for (size_t r = 0; r < rank_; ++r) {
-        T sum = 0;
-        for (size_t b = 0; b < batch_size; ++b) {
-          sum += grad_output[b, o] * temp_z_[b, r];
-        }
-        grad_b[o, r] = static_cast<T>(scaling_) * sum;
-      }
-    }
+    ::qlora::data_structure::Matrix<T> grad_b(grad_output.num_cols(), rank_);
+    ::qlora::ops::MatMul(grad_output, true, temp_z_, false, grad_b,
+                    static_cast<T>(scaling_));
     return std::move(grad_b);
   }
 
   ::qlora::data_structure::Matrix<T> CalculateGradA(const ::qlora::data_structure::Matrix<T>& grad_z) {
     // gradZ^T(rank, batch_size) * input_x(batch_size, in) -> gradA(rank, in)
-    const size_t batch_size = grad_z.num_rows();
-    const size_t in_features_dim = input_x_copy_.num_cols();
-    ::qlora::data_structure::Matrix<T> grad_a(rank_, in_features_dim);
-    for (size_t r = 0; r < rank_; ++r) {
-      for (size_t b = 0; b < batch_size; ++b) {
-        for (size_t i = 0; i < in_features_dim; ++i) {
-          grad_a[r, i] += grad_z[b, r] * input_x_copy_[b, i];
-        }
-      }
-    }
+    ::qlora::data_structure::Matrix<T> grad_a(rank_, input_x_copy_.num_cols());
+    ::qlora::ops::MatMul(grad_z, true, input_x_copy_, false, grad_a);
     return std::move(grad_a);
   }
 
@@ -186,13 +143,7 @@ class LoRALinearLayer {
     // gradZ(batch_size, rank) * A(rank, in) + gradY(batch_size, out) * W(out, in) -> gradX(batch_size, in)
     const size_t batch_size = grad_output.num_rows();
     ::qlora::data_structure::Matrix<T> grad_x(batch_size, in_features_dim_);
-    for (size_t b = 0; b < batch_size; ++b) {
-      for (size_t r = 0; r < rank_; ++r) {
-        for (size_t i = 0; i < in_features_dim_; ++i) {
-          grad_x[b, i] += grad_z[b, r] * matrix_a_[r, i];
-        }
-      }
-    }
+    ::qlora::ops::MatMul(grad_z, false, matrix_a_, false, grad_x);
 
     for (size_t o = 0; o < out_features_dim_; ++o) {
       T quantize_scale = 0;
