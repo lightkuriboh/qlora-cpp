@@ -71,29 +71,13 @@ class LoRALinearLayer {
     const size_t batch_size = input_x.num_rows();
     const size_t in_features_dim = input_x.num_cols();
     const size_t out_features_dim = out_features_dim_;
+    auto quantized_weight_cursor = base_weights_.GetCursor();
 
-    for (size_t b = 0; b < batch_size; ++b) {
-      for (size_t o = 0; o < out_features_dim; ++o) {
-        T quantize_scale = 0;
-        for (size_t i = 0; i < in_features_dim; ++i) {
-          const size_t weight_index = o * in_features_dim + i;
-          // Potentially get packed nibbles and bit shift to get them instead of getting every time
-          const uint8_t nf4_index = (weight_index % 2 == 0)
-                                        ? base_weights_.GetNf4CentroidIndicesPair(weight_index).first
-                                        : base_weights_.GetNf4CentroidIndicesPair(weight_index).second;
-
-          const float weight_centroid = ::qlora::nf4_constants::kNf4Centroids[nf4_index];
-          const size_t block_index = weight_index / base_weights_.block_size();
-
-          if (weight_index % base_weights_.block_size() == 0) {
-            const uint8_t const_nf4_idx = base_weights_.GetQuantizeConstantNf4CentroidIndex(block_index);
-            const float quantize_constant_centroid = qlora::nf4_constants::kNf4Centroids[const_nf4_idx];
-            const T doubled_quantize_constant = base_weights_.GetDoubleQuantizeConstant(weight_index);
-            quantize_scale = (doubled_quantize_constant * quantize_constant_centroid)
-                                 + base_weights_.quantize_constant_mean();
-          }
-
-          const T dequantized_w = static_cast<T>(quantize_scale * weight_centroid);
+    for (size_t o = 0; o < out_features_dim; ++o) {
+      for (size_t i = 0; i < in_features_dim; ++i) {
+        const size_t weight_index = o * in_features_dim + i;
+        const T dequantized_w =quantized_weight_cursor.GetWeight(weight_index);
+        for (size_t b = 0; b < batch_size; ++b) {
           output_y[b, o] += input_x[b, i] * dequantized_w;
         }
       }
@@ -145,27 +129,11 @@ class LoRALinearLayer {
     ::qlora::data_structure::Matrix<T> grad_x(batch_size, in_features_dim_);
     ::qlora::ops::MatMul(grad_z, false, matrix_a_, false, grad_x);
 
+    auto quantized_weight_cursor = base_weights_.GetCursor();
     for (size_t o = 0; o < out_features_dim_; ++o) {
-      T quantize_scale = 0;
       for (size_t i = 0; i < in_features_dim_; ++i) {
         const size_t weight_index = o * in_features_dim_ + i;
-        // Potentially get packed nibbles and bit shift to get them instead of getting every time
-        const uint8_t nf4_index = (weight_index % 2 == 0)
-                                      ? base_weights_.GetNf4CentroidIndicesPair(weight_index).first
-                                      : base_weights_.GetNf4CentroidIndicesPair(weight_index).second;
-
-        const float weight_centroid = ::qlora::nf4_constants::kNf4Centroids[nf4_index];
-        const size_t block_index = weight_index / base_weights_.block_size();
-
-        if (weight_index % base_weights_.block_size() == 0) {
-          const uint8_t const_nf4_idx = base_weights_.GetQuantizeConstantNf4CentroidIndex(block_index);
-          const float quantize_constant_centroid = qlora::nf4_constants::kNf4Centroids[const_nf4_idx];
-          const T doubled_quantize_constant = base_weights_.GetDoubleQuantizeConstant(weight_index);
-          quantize_scale = (doubled_quantize_constant * quantize_constant_centroid)
-                               + base_weights_.quantize_constant_mean();
-        }
-
-        const T dequantized_w = static_cast<T>(quantize_scale * weight_centroid);
+        const T dequantized_w = quantized_weight_cursor.GetWeight(weight_index);
 
         for (size_t b = 0; b < batch_size; ++b) {
           grad_x[b, i] += grad_output[b, o] * dequantized_w;

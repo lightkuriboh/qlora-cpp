@@ -116,6 +116,37 @@ class QuantizedData {
     double_quantized_constants_[target_index] = value;
   }
 
+  struct DequantizationCursor {
+    const QuantizedData& data;
+    T current_scale;
+    std::pair<uint8_t, uint8_t> current_nibbles;
+    size_t last_block_index = -1;
+    size_t last_processed_index = -1;
+
+    T GetWeight(size_t weight_index) {
+      if (const size_t block_index = weight_index / data.block_size(); block_index != last_block_index) {
+        const uint8_t const_nf4_idx = data.GetQuantizeConstantNf4CentroidIndex(block_index);
+        T doubled_quantize_constant = data.GetDoubleQuantizeConstant(weight_index);
+        current_scale = (doubled_quantize_constant * nf4_constants::kNf4Centroids[const_nf4_idx]) +
+                        data.quantize_constant_mean();
+        last_block_index = block_index;
+      }
+
+      if (weight_index % 2 == 0) {
+        current_nibbles = data.GetNf4CentroidIndicesPair(weight_index);
+        last_processed_index = weight_index;
+        return current_scale * nf4_constants::kNf4Centroids[current_nibbles.first];
+      }
+      if (weight_index != last_processed_index + 1) {
+        current_nibbles = data.GetNf4CentroidIndicesPair(weight_index - 1);
+      }
+      last_processed_index = weight_index;
+      return current_scale * nf4_constants::kNf4Centroids[current_nibbles.second];
+    }
+  };
+
+  DequantizationCursor GetCursor() const { return {*this}; }
+
  private:
   std::size_t original_data_size_;
   std::size_t block_size_;
@@ -128,6 +159,7 @@ class QuantizedData {
   std::vector<std::uint8_t> quantize_constants_nf4_centroid_indices_;
   std::vector<T> double_quantized_constants_;
 };
+
 }  // namespace qlora::data_structure
 
 #endif  // QLORA_QUANTIZED_DATA_H_
