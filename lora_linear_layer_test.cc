@@ -31,16 +31,16 @@ class LoRALinearLayerTest : public ::testing::Test {
 };
 
 TEST_F(LoRALinearLayerTest, StepReducesLoss) {
-  std::mt19937 gen(21);
-  const auto weights = qlora::numeric_utility::GenerateGaussianVector<float>(kInDim * kOutDim, gen);
+  std::mt19937 generator(21);
+  const auto weights = qlora::numeric_utility::GenerateGaussianVector<float>(kInDim * kOutDim, generator);
   const auto quantized_base = ::qlora::quantization::BlockWiseNf4Quantization(weights, 64, 256);
 
-  LoRALinearLayer layer(kInDim, kOutDim, kRank, alpha, quantized_base, gen);
+  LoRALinearLayer layer(kInDim, kOutDim, kRank, alpha, quantized_base, LayerMode::kTraining, &generator);
 
   Matrix<float> input(1, kInDim);
-  input.FillGaussianMatrix(gen);
+  input.FillGaussianMatrix(generator);
   Matrix<float> target(1, kOutDim);
-  target.FillGaussianMatrix(gen);
+  target.FillGaussianMatrix(generator);
 
   constexpr size_t num_iterations = 10;
   for (size_t i = 0; i < num_iterations; ++i) {

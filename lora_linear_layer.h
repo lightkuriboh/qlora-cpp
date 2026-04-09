@@ -3,11 +3,15 @@
 #ifndef QLORA_LORA_LINEAR_LAYER_H_
 #define QLORA_LORA_LINEAR_LAYER_H_
 
+#include <optional>
+
 #include "matmul.h"
 #include "matrix.h"
 #include "quantized_data.h"
 
 namespace qlora::lora {
+
+enum class LayerMode { kInference, kTraining };
 
 template <typename T>
 class LoRALinearLayer {
@@ -17,18 +21,32 @@ class LoRALinearLayer {
                   size_t rank,
                   float alpha,
                   ::qlora::data_structure::QuantizedData<T> base_weights,
-                  std::mt19937& generator)
+                  LayerMode layer_mode = LayerMode::kInference,
+                  std::mt19937* generator = nullptr)
       : in_features_dim_(in_features_dim),
         out_features_dim_(out_features_dim),
         rank_(rank),
         alpha_(alpha),
         scaling_(alpha / static_cast<float>(rank)),
         has_gradients_(false),
+        layer_mode_(layer_mode),
         base_weights_(std::move(base_weights)) {
 
-    matrix_a_ = ::qlora::data_structure::Matrix<T>(rank, in_features_dim);
-    matrix_a_.FillGaussianMatrix(generator);
-    matrix_b_ = ::qlora::data_structure::Matrix<T>(out_features_dim, rank);
+    if (layer_mode_ == LayerMode::kTraining) {
+      matrix_a_ = ::qlora::data_structure::Matrix<T>(rank, in_features_dim);
+      matrix_a_.FillGaussianMatrix(*generator);
+      matrix_b_ = ::qlora::data_structure::Matrix<T>(out_features_dim, rank);
+    } else {
+      LoadABMatrices();
+    }
+  }
+
+  void SetLayerMode(LayerMode layer_mode) {
+    layer_mode_ = layer_mode;
+    if (layer_mode_ == LayerMode::kInference) {
+      input_x_copy_ = {};
+      temp_z_ = {};
+    }
   }
 
   ::qlora::data_structure::Matrix<T> Forward(const ::qlora::data_structure::Matrix<T>& input_x) {
@@ -40,7 +58,9 @@ class LoRALinearLayer {
     ApplyQuantizedWeights(input_x, output_y);
     ApplyLoRAAdapters(input_x, output_y);
 
-    MakeCopyOfInput(input_x);
+    if (layer_mode_ == LayerMode::kTraining) {
+      input_x_copy_ = input_x;
+    }
     return output_y;
   }
 
@@ -65,6 +85,8 @@ class LoRALinearLayer {
   }
 
  private:
+  void LoadABMatrices() {}
+
   void ApplyQuantizedWeights(const ::qlora::data_structure::Matrix<T>& input_x,
   ::qlora::data_structure::Matrix<T>& output_y) {
     // X(batch_size, in) * W^T(in, out) -> Y_base(batch_size, out)
@@ -87,16 +109,16 @@ class LoRALinearLayer {
   void ApplyLoRAAdapters(const ::qlora::data_structure::Matrix<T>& input_x,
   ::qlora::data_structure::Matrix<T>& output_y) {
     // X(batch_size, in) * A^T(in, rank) -> Z(batch_size, rank)
-    temp_z_ = ::qlora::data_structure::Matrix<T>(input_x.num_rows(), rank_);
-    ::qlora::ops::MatMul(input_x, false, matrix_a_, true, temp_z_);
+    ::qlora::data_structure::Matrix<T> temp_z(input_x.num_rows(), rank_);
+    ::qlora::ops::MatMul(input_x, false, matrix_a_, true, temp_z);
 
     // Z(batch_size, rank) * B^T(rank, out) -> output_y(batch_size, out)
-    ::qlora::ops::MatMul(temp_z_, false, matrix_b_, true, output_y,
+    ::qlora::ops::MatMul(temp_z, false, matrix_b_, true, output_y,
                     static_cast<T>(scaling_), static_cast<T>(1.0f));
-  }
 
-  void MakeCopyOfInput(const ::qlora::data_structure::Matrix<T>& input_x) {
-    input_x_copy_ = input_x;
+    if (layer_mode_ == LayerMode::kTraining) {
+      temp_z_ = temp_z;
+    }
   }
 
   ::qlora::data_structure::Matrix<T> CalculateGradZ(const ::qlora::data_structure::Matrix<T>& grad_output) {
@@ -151,6 +173,8 @@ class LoRALinearLayer {
   float scaling_;
 
   bool has_gradients_;
+
+  LayerMode layer_mode_;
 
   ::qlora::data_structure::QuantizedData<T> base_weights_;
 
