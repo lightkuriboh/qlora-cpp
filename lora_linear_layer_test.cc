@@ -1,6 +1,7 @@
 #include "lora_linear_layer.h"
 
 #include <gtest/gtest.h>
+#include <iostream>
 #include <random>
 #include <vector>
 
@@ -41,19 +42,21 @@ TEST_F(LoRALinearLayerTest, StepReducesLoss) {
   Matrix<float> target(1, kOutDim);
   target.FillGaussianMatrix(gen);
 
-  auto pred = layer.Forward(input);
-  const float loss_before = CalculateMSE(pred, target);
+  constexpr size_t num_iterations = 10;
+  for (size_t i = 0; i < num_iterations; ++i) {
+    auto pred = layer.Forward(input);
+    const float loss_before = CalculateMSE(pred, target);
 
-  // Calculate Gradient of MSE: 2 * (pred - target) / N
-  Matrix<float> grad_output(1, kOutDim);
-  for(size_t i = 0; i < kOutDim; ++i) {
-    grad_output[0, i] = 2.0f * (pred[0, i] - target[0, i]) / static_cast<float>(kOutDim);
+    // Calculate Gradient of MSE: 2 * (pred - target) / N
+    Matrix<float> grad_output(1, kOutDim);
+    for(size_t i = 0; i < kOutDim; ++i) {
+      grad_output[0, i] = 2.0f * (pred[0, i] - target[0, i]) / static_cast<float>(kOutDim);
+    }
+
+    layer.Backward(grad_output);
+    layer.Step(0.01f);
+
+    const float loss_after_grad = CalculateMSE(layer.Forward(input), target);
+    EXPECT_LT(loss_after_grad, loss_before) << "Optimization step failed to reduce loss.";
   }
-
-  layer.Backward(grad_output);
-  layer.Step(0.01f);
-
-  const float loss_after = CalculateMSE(layer.Forward(input), target);
-
-  EXPECT_LT(loss_after, loss_before) << "Optimization step failed to reduce loss.";
 }
