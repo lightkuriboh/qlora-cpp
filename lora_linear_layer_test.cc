@@ -1,11 +1,10 @@
 #include "lora_linear_layer.h"
 
 #include <gtest/gtest.h>
-#include <iostream>
 #include <random>
 #include <vector>
 
-#include "qlora.h"
+#include "quantization.h"
 
 using namespace qlora::lora;
 using namespace qlora::data_structure;
@@ -33,7 +32,7 @@ class LoRALinearLayerTest : public ::testing::Test {
 TEST_F(LoRALinearLayerTest, StepReducesLoss) {
   std::mt19937 gen(21);
   const auto weights = qlora::numeric_utility::GenerateGaussianVector<float>(kInDim * kOutDim, gen);
-  const auto quantized_base = ::qlora::core::BlockWiseNf4Quantization(weights, 64, 256);
+  const auto quantized_base = ::qlora::quantization::BlockWiseNf4Quantization(weights, 64, 256);
 
   LoRALinearLayer layer(kInDim, kOutDim, kRank, alpha, quantized_base, gen);
 

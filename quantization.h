@@ -1,7 +1,7 @@
-// qlora.h
+// quantization.h
 
-#ifndef QLORA_QLORA_H_
-#define QLORA_QLORA_H_
+#ifndef QLORA_QUANTIZATION_H_
+#define QLORA_QUANTIZATION_H_
 
 #include <algorithm>
 #include <iostream>
@@ -13,7 +13,7 @@
 #include "quantized_data.h"
 
 
-namespace qlora::core {
+namespace qlora::quantization {
 
 template <typename T>
 inline double CalculateCompressionRatio(
@@ -129,4 +129,4 @@ inline std::vector<T> Dequantize(const data_structure::QuantizedData<T>& quantiz
 
 }  // namespace qlora::core
 
-#endif  // QLORA_QLORA_H_
+#endif  // QLORA_QUANTIZATION_H_

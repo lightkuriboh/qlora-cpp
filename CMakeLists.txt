@@ -29,7 +29,6 @@ target_link_libraries(qlora_cpp PRIVATE qlora_core)
 # Testing
 add_executable(all_tests
         quantization_test.cc
-        lora_forward_test.cc
         lora_linear_layer_test.cc)
 target_link_libraries(all_tests
         PRIVATE

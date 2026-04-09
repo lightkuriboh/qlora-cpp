@@ -1,10 +1,10 @@
-#include "qlora.h"
+#include "quantization.h"
 
 #include <gtest/gtest.h>
 #include <random>
 #include <vector>
 
-namespace qlora::core {
+namespace qlora::quantization {
 
 class QLoraQuantizationTest : public ::testing::Test {
 protected:

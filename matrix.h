@@ -1,6 +1,7 @@
+// matrix.h
 
-#ifndef QLORA_CPP_MATRIX_H
-#define QLORA_CPP_MATRIX_H
+#ifndef QLORA_MATRIX_H
+#define QLORA_MATRIX_H
 
 #include <random>
 #include <vector>
@@ -89,4 +90,4 @@ private:
 
 }  // namespace qlora::data_structure
 
-#endif //QLORA_CPP_MATRIX_H
+#endif //QLORA_MATRIX_H

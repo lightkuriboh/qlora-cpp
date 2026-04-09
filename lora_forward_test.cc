@@ -2,9 +2,9 @@
 #include <random>
 #include "lora_linear_layer.h"
 #include "matrix.h"
-#include "qlora.h"
+#include "quantization.h"
 
-using namespace qlora::core;
+using namespace qlora::quantization;
 using namespace qlora::lora;
 using namespace qlora::data_structure;
 

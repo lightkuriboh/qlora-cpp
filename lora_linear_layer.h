@@ -1,9 +1,7 @@
-// LoRALinearLayer.h
+// lora_linear_layer.h
 
 #ifndef QLORA_LORA_LINEAR_LAYER_H_
 #define QLORA_LORA_LINEAR_LAYER_H_
-
-#include <vector>
 
 #include "matrix.h"
 #include "quantized_data.h"

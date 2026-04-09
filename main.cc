@@ -1,5 +1,5 @@
 
-#include "qlora.h"
+#include "quantization.h"
 
 
 int main() {
@@ -30,7 +30,7 @@ int main() {
   }
 
   const auto quantized_data =
-    ::qlora::core::BlockWiseNf4Quantization<float>(
+    ::qlora::quantization::BlockWiseNf4Quantization<float>(
         weights_vector, block_size, quantize_constants_blocks_size);
 
   if (is_verbose) {
@@ -51,7 +51,7 @@ int main() {
   }
 
   const auto dequantized_values =
-      ::qlora::core::Dequantize<float>(quantized_data);
+      ::qlora::quantization::Dequantize<float>(quantized_data);
 
   const double mse =
       ::qlora::numeric_utility::CalculateMeanSquaredError(
@@ -60,7 +60,7 @@ int main() {
   std::cout << "Mean Squared Error (MSE): " << mse << "\n";
 
   const double compression_ratio =
-      ::qlora::core::CalculateCompressionRatio(quantized_data);
+      ::qlora::quantization::CalculateCompressionRatio(quantized_data);
   std::cout << "Compression Ratio: " << compression_ratio << "\n";
 
   return 0;
