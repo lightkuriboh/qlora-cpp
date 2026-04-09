@@ -1,8 +1,8 @@
+#include "qlora.h"
+
 #include <gtest/gtest.h>
 #include <random>
 #include <vector>
-
-#include "qlora.h"
 
 namespace qlora::core {
 

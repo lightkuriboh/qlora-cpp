@@ -24,6 +24,7 @@ class LoRALinearLayer {
         rank_(rank),
         alpha_(alpha),
         scaling_(alpha / static_cast<float>(rank)),
+        has_gradients_(false),
         base_weights_(std::move(base_weights)) {
 
     matrix_a_ = ::qlora::data_structure::Matrix<T>(rank, in_features_dim);
@@ -45,10 +46,10 @@ class LoRALinearLayer {
   }
 
   ::qlora::data_structure::Matrix<T> Backward(const ::qlora::data_structure::Matrix<T>& grad_output) {
-    auto grad_z = CalculateDeltaZ(grad_output);
+    auto grad_z = CalculateGradZ(grad_output);
 
-    grad_b_ = CalculateDeltaB(grad_output);
-    grad_a_ = CalculateDeltaA(grad_z);
+    grad_b_ = CalculateGradB(grad_output);
+    grad_a_ = CalculateGradA(grad_z);
     has_gradients_ = true;
 
     auto grad_x = CalculateGradX(grad_z, grad_output);
@@ -122,7 +123,7 @@ class LoRALinearLayer {
       for (size_t o = 0; o < out_features_dim; ++o) {
         T sum = 0;
         for (size_t r = 0; r < rank; ++r) {
-          sum += temp_z_[b, r] * matrix_b_[r, o];
+          sum += temp_z_[b, r] * matrix_b_[o, r];
         }
         output_y[b, o] += sum * static_cast<T>(scaling_);
       }
@@ -167,15 +168,15 @@ class LoRALinearLayer {
     return std::move(grad_b);
   }
 
-  ::qlora::data_structure::Matrix<T> CalculateGradA(const ::qlora::data_structure::Matrix<T>& delta_z) {
+  ::qlora::data_structure::Matrix<T> CalculateGradA(const ::qlora::data_structure::Matrix<T>& grad_z) {
     // gradZ^T(rank, batch_size) * input_x(batch_size, in) -> gradA(rank, in)
-    const size_t batch_size = delta_z.num_rows();
+    const size_t batch_size = grad_z.num_rows();
     const size_t in_features_dim = input_x_copy_.num_cols();
     ::qlora::data_structure::Matrix<T> grad_a(rank_, in_features_dim);
     for (size_t r = 0; r < rank_; ++r) {
       for (size_t b = 0; b < batch_size; ++b) {
         for (size_t i = 0; i < in_features_dim; ++i) {
-          grad_a[r, i] += delta_z[b, r] * input_x_copy_[b, i];
+          grad_a[r, i] += grad_z[b, r] * input_x_copy_[b, i];
         }
       }
     }

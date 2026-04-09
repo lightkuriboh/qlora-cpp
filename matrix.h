@@ -53,6 +53,10 @@ class Matrix
     return result;
   }
 
+  friend Matrix operator*(T scalar, const Matrix& m) {
+    return m * scalar;
+  }
+
   size_t num_rows() const { return num_rows_; }
   size_t num_cols() const { return num_cols_; }
 
