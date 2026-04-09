@@ -38,6 +38,21 @@ class Matrix
   Matrix(Matrix&& other) noexcept = default;
   Matrix& operator=(Matrix&& other) noexcept = default;
 
+  Matrix& operator-=(const Matrix& other) {
+    for (size_t i = 0; i < matrix_.size(); ++i) {
+      matrix_[i] -= other.matrix_[i];
+    }
+    return *this;
+  }
+
+  Matrix operator*(T scalar) const {
+    Matrix result = *this;
+    for (auto& val : result.matrix_) {
+      val *= scalar;
+    }
+    return result;
+  }
+
   size_t num_rows() const { return num_rows_; }
   size_t num_cols() const { return num_cols_; }
 

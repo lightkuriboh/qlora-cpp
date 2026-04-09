@@ -49,10 +49,19 @@ class LoRALinearLayer {
 
     grad_b_ = CalculateDeltaB(grad_output);
     grad_a_ = CalculateDeltaA(grad_z);
-    has_gradient_ = true;
+    has_gradients_ = true;
 
     auto grad_x = CalculateGradX(grad_z, grad_output);
     return std::move(grad_x);
+  }
+
+  void Step(T learning_rate) {
+    if (!has_gradients_) return;
+
+    matrix_a_ -= grad_a_ * learning_rate;
+    matrix_b_ -= grad_b_ * learning_rate;
+
+    has_gradients_ = false;
   }
 
  private:
@@ -223,7 +232,7 @@ class LoRALinearLayer {
   float alpha_;
   float scaling_;
 
-  bool has_gradient_;
+  bool has_gradients_;
 
   ::qlora::data_structure::QuantizedData<T> base_weights_;
 
