@@ -44,6 +44,7 @@ class LoRALinearLayer {
   void SetLayerMode(LayerMode layer_mode) {
     layer_mode_ = layer_mode;
     if (layer_mode_ == LayerMode::kInference) {
+      // Deallocate memory of unused matrices. Handled by destructor of internal std::vector after Move assignment.
       input_x_copy_ = {};
       temp_z_ = {};
     }
