@@ -81,8 +81,8 @@ class Matrix
   }
 
 private:
-  size_t num_rows_;
-  size_t num_cols_;
+  size_t num_rows_ = 0;
+  size_t num_cols_ = 0;
 
   std::vector<T> matrix_;
 };
