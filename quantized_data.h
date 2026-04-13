@@ -116,6 +116,13 @@ class QuantizedData {
     double_quantized_constants_[target_index] = value;
   }
 
+  const std::uint8_t* GetPackedDataPtr(size_t target_index) const {
+    if (target_index >= original_data_size_) {
+      throw std::out_of_range("Index out of range for quantized values.");
+    }
+    return &weight_nf4_centroid_indices_[target_index / 2];
+  }
+
   struct DequantizationCursor {
     const QuantizedData& data;
     T current_scale;
@@ -123,14 +130,20 @@ class QuantizedData {
     size_t last_block_index = -1;
     size_t last_processed_index = -1;
 
-    T GetWeight(size_t weight_index) {
-      if (const size_t block_index = weight_index / data.block_size(); block_index != last_block_index) {
+    T GetCurrentScale(size_t weight_index) {
+      const size_t block_index = weight_index / data.block_size();
+      if (block_index != last_block_index) {
         const uint8_t const_nf4_idx = data.GetQuantizeConstantNf4CentroidIndex(block_index);
         T doubled_quantize_constant = data.GetDoubleQuantizeConstant(weight_index);
         current_scale = (doubled_quantize_constant * nf4_constants::kNf4Centroids[const_nf4_idx]) +
                         data.quantize_constant_mean();
         last_block_index = block_index;
       }
+      return current_scale;
+    }
+
+    T GetWeight(size_t weight_index) {
+      current_scale = GetCurrentScale(weight_index);
 
       if (weight_index % 2 == 0) {
         current_nibbles = data.GetNf4CentroidIndicesPair(weight_index);

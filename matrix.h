@@ -6,10 +6,10 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <immintrin.h>
 #include <memory>
 #include <random>
 #include <stdexcept>
-#include <vector>
 
 #include "numeric_util.h"
 

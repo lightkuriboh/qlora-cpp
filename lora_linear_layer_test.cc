@@ -46,6 +46,9 @@ TEST_F(LoRALinearLayerTest, StepReducesLoss) {
   for (size_t i = 0; i < num_iterations; ++i) {
     auto pred = layer.Forward(input);
     const float loss_before_grad = CalculateMSE(pred, target);
+    if (i == 0) {
+      EXPECT_FLOAT_EQ(loss_before_grad, 9.54082f);
+    }
 
     // Calculate Gradient of MSE: 2 * (pred - target) / N
     Matrix<float> grad_output(1, kOutDim);

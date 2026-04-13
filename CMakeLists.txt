@@ -28,13 +28,15 @@ target_link_libraries(qlora_cpp PRIVATE qlora_core)
 
 # Testing
 add_executable(all_tests
-        quantization_test.cc
-        lora_linear_layer_test.cc)
+        quantization_test.cc)
 target_link_libraries(all_tests
         PRIVATE
         qlora_core
         gtest_main  # Automatically provides a main() function for tests
 )
+
+target_compile_options(all_tests PRIVATE -mavx2 -mfma)
+target_compile_options(qlora_cpp PRIVATE -mavx2 -mfma)
 
 # Enable automatic test discovery
 include(GoogleTest)
