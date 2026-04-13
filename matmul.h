@@ -3,10 +3,11 @@
 #ifndef QLORA_CPP_MATMUL_H
 #define QLORA_CPP_MATMUL_H
 
+#include <immintrin.h>
 #include <stdexcept>
 
 #include "matrix.h"
-#include "quantized_data.h"
+#include "simd_kernel.h"
 
 namespace qlora::ops {
   template <typename T>
@@ -24,13 +25,36 @@ namespace qlora::ops {
 
     for (size_t i = 0; i < M; ++i) {
       for (size_t j = 0; j < N; ++j) {
-        T sum = 0;
-        for (size_t k = 0; k < K; ++k) {
-          T a_val = matrix_a_transposed ? a_matrix[k, i] : a_matrix[i, k];
-          T b_val = matrix_b_transposed ? b_matrix[j, k] : b_matrix[k, j];
-          sum += a_val * b_val;
+        // We only use SIMD if both A and B are being accessed row-major in the inner loop
+        // This happens if (not A_transposed) AND (B_transposed)
+        if (!matrix_a_transposed && matrix_b_transposed) {
+          __m256 v_acc = _mm256_setzero_ps();
+          size_t k = 0;
+
+          for (; k + 8 <= K; k += 8) {
+            __m256 va = _mm256_load_ps(&a_matrix[i, k]);
+            __m256 vb = _mm256_load_ps(&b_matrix[j, k]);
+            v_acc = _mm256_fmadd_ps(va, vb, v_acc);
+          }
+
+          T sum = ::qlora::kernels::HorizontalSumAVX2(v_acc);
+
+          for (; k < K; ++k) {
+            sum += a_matrix[i, k] * b_matrix[j, k];
+          }
+
+          c_matrix[i, j] = alpha * sum + (beta == 0 ? 0 : beta * c_matrix[i, j]);
         }
-        c_matrix[i, j] = alpha * sum + (beta == 0 ? 0 : beta * c_matrix[i, j]);
+        else {
+          // Fallback for other transpose combinations (Scalar for now)
+          T sum = 0;
+          for (size_t k = 0; k < K; ++k) {
+            T a_val = matrix_a_transposed ? a_matrix[k, i] : a_matrix[i, k];
+            T b_val = matrix_b_transposed ? b_matrix[j, k] : b_matrix[k, j];
+            sum += a_val * b_val;
+          }
+          c_matrix[i, j] = alpha * sum + (beta == 0 ? 0 : beta * c_matrix[i, j]);
+        }
       }
     }
   }
