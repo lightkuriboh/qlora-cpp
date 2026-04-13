@@ -8,6 +8,7 @@
 #include "matmul.h"
 #include "matrix.h"
 #include "quantized_data.h"
+#include "simd_kernel.h"
 
 namespace qlora::lora {
 
@@ -94,14 +95,39 @@ class LoRALinearLayer {
     const size_t batch_size = input_x.num_rows();
     const size_t in_features_dim = input_x.num_cols();
     const size_t out_features_dim = out_features_dim_;
-    auto quantized_weight_cursor = base_weights_.GetCursor();
 
-    for (size_t o = 0; o < out_features_dim; ++o) {
-      for (size_t i = 0; i < in_features_dim; ++i) {
-        const size_t weight_index = o * in_features_dim + i;
-        const T dequantized_w =quantized_weight_cursor.GetWeight(weight_index);
-        for (size_t b = 0; b < batch_size; ++b) {
-          output_y[b, o] += input_x[b, i] * dequantized_w;
+    for (size_t b = 0; b < batch_size; ++b) {
+      for (size_t o = 0; o < out_features_dim; ++o) {
+        // Accumulator tray for 8 parallel floats
+        __m256 v_acc = _mm256_setzero_ps();
+
+        auto cursor = base_weights_.GetCursor();
+        size_t i = 0;
+
+        // SIMD Main Loop (8 elements at a time)
+        for (; i + 8 <= in_features_dim; i += 8) {
+          const size_t weight_index = o * in_features_dim + i;
+
+          // Fetch scale for this block (DequantizationCursor handles logic)
+          T scale = cursor.GetTotalScale(weight_index);
+
+          // Load 8 weights (4 bytes) and dequantize into a register
+          const uint8_t* packed_ptr = base_weights_.GetPackedDataPtr(weight_index);
+          __m256 v_weights = ::qlora::kernels::Dequantize8WeightsAVX2(packed_ptr, scale);
+
+          // Load 8 inputs (Must be 32-byte aligned in Matrix class)
+          __m256 v_input = _mm256_load_ps(&input_x[b, i]);
+
+          // Fused Multiply-Add: v_acc += (v_weights * v_input)
+          v_acc = _mm256_fmadd_ps(v_weights, v_input, v_acc);
+        }
+
+        // Horizontal sum of the 8 lanes to get the final scalar
+        output_y[b, o] += ::qlora::kernels::HorizontalSumAVX2(v_acc);
+
+        // Scalar Tail (Handle remaining 0-7 elements)
+        for (; i < in_features_dim; ++i) {
+          output_y[b, o] += input_x[b, i] * cursor.GetWeight(o * in_features_dim + i);
         }
       }
     }
@@ -152,14 +178,35 @@ class LoRALinearLayer {
     ::qlora::data_structure::Matrix<T> grad_x(batch_size, in_features_dim_);
     ::qlora::ops::MatMul(grad_z, false, matrix_a_, false, grad_x);
 
-    auto quantized_weight_cursor = base_weights_.GetCursor();
-    for (size_t o = 0; o < out_features_dim_; ++o) {
-      for (size_t i = 0; i < in_features_dim_; ++i) {
-        const size_t weight_index = o * in_features_dim_ + i;
-        const T dequantized_w = quantized_weight_cursor.GetWeight(weight_index);
+    for (size_t b = 0; b < batch_size; ++b) {
+      auto cursor = base_weights_.GetCursor();
 
-        for (size_t b = 0; b < batch_size; ++b) {
-          grad_x[b, i] += grad_output[b, o] * dequantized_w;
+      for (size_t o = 0; o < out_features_dim_; ++o) {
+        // Broadcast the single gradient value across a whole SIMD register
+        __m256 v_grad_out = _mm256_set1_ps(grad_output[b, o]);
+
+        size_t i = 0;
+        // SIMD Inner Loop: Processing columns of W
+        for (; i + 8 <= in_features_dim_; i += 8) {
+          const size_t weight_index = o * in_features_dim_ + i;
+          T scale = cursor.GetTotalScale(weight_index);
+
+          const uint8_t* packed_ptr = base_weights_.GetPackedDataPtr(weight_index);
+          __m256 v_weights = kernels::Dequantize8WeightsAVX2(packed_ptr, scale);
+
+          // Load current grad_x values
+          __m256 v_grad_x = _mm256_load_ps(&grad_x[b, i]);
+
+          // v_grad_x += (v_grad_out * v_weights)
+          v_grad_x = _mm256_fmadd_ps(v_grad_out, v_weights, v_grad_x);
+
+          // Store back to grad_x
+          _mm256_store_ps(&grad_x[b, i], v_grad_x);
+        }
+
+        // Scalar Tail
+        for (; i < in_features_dim_; ++i) {
+          grad_x[b, i] += grad_output[b, o] * cursor.GetWeight(o * in_features_dim_ + i);
         }
       }
     }
