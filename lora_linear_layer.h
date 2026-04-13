@@ -3,7 +3,7 @@
 #ifndef QLORA_LORA_LINEAR_LAYER_H_
 #define QLORA_LORA_LINEAR_LAYER_H_
 
-#include <optional>
+#include <omp.h>
 
 #include "matmul.h"
 #include "matrix.h"
@@ -96,6 +96,7 @@ class LoRALinearLayer {
     const size_t in_features_dim = input_x.num_cols();
     const size_t out_features_dim = out_features_dim_;
 
+    #pragma omp parallel for schedule(static)
     for (size_t b = 0; b < batch_size; ++b) {
       for (size_t o = 0; o < out_features_dim; ++o) {
         // Accumulator tray for 8 parallel floats
@@ -178,6 +179,7 @@ class LoRALinearLayer {
     ::qlora::data_structure::Matrix<T> grad_x(batch_size, in_features_dim_);
     ::qlora::ops::MatMul(grad_z, false, matrix_a_, false, grad_x);
 
+    #pragma omp parallel for schedule(static)
     for (size_t b = 0; b < batch_size; ++b) {
       auto cursor = base_weights_.GetCursor();
 

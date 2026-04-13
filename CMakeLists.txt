@@ -36,6 +36,11 @@ target_link_libraries(all_tests
         gtest_main  # Automatically provides a main() function for tests
 )
 
+# OpenMP
+find_package(OpenMP REQUIRED)
+target_link_libraries(all_tests PRIVATE OpenMP::OpenMP_CXX)
+
+# Compiler options for AVX2
 target_compile_options(all_tests PRIVATE -mavx2 -mfma)
 target_compile_options(qlora_cpp PRIVATE -mavx2 -mfma)
 
