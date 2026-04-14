@@ -36,11 +36,9 @@ void MatMul(const data_structure::Matrix<T>& a, bool transpose_a,
     for (size_t j = 0; j < n; ++j) {
       T sum = 0;
 
-      // Optimization: Vectorized Dot Product Path.
-      // This path triggers when A is row-major and B is col-major (transposed row-major).
       // Both inner loops then traverse contiguous memory.
       if constexpr (std::is_same_v<T, float>) {
-        if (!transpose_a && transpose_b) {
+        if (!transpose_a && !transpose_b) {
           __m256 v_acc = _mm256_setzero_ps();
           size_t k = 0;
 
